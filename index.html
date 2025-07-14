@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Management System</title>
+  <script>
+    window.tailwind = { config: { darkMode: 'class' } };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div id="navbar-container"></div>
+  <div id="sidebar-container"></div>
+  <main class="max-w-6xl mx-auto px-2 sm:px-4 mt-14 sm:mt-0">
+    <!-- Dashboard Page -->
+    <section id="page-dashboard">
+      <div id="dashboard-cards-container"></div>
+      <div id="low-stock-table-container"></div>
+      <div id="recent-sales-table-container"></div>
+    </section>
+    <!-- Add Item Page -->
+    <section id="page-add" class="hidden">
+      <div id="add-item-container"></div>
+    </section>
+    <!-- Manage Inventory Page -->
+    <section id="page-manage" class="hidden">
+      <div id="manage-inventory-container"></div>
+    </section>
+  </main>
+  <script>
+    // Load HTML components into containers
+    async function loadComponent(id, url) {
+      const res = await fetch(url);
+      const html = await res.text();
+      document.getElementById(id).innerHTML = html;
+    }
+
+    // Helper to run after navbar/sidebar loaded
+    function setupNavigation() {
+      // NAVBAR BUTTONS
+      const pages = {
+        dashboard: document.getElementById('page-dashboard'),
+        add: document.getElementById('page-add'),
+        manage: document.getElementById('page-manage')
+      };
+      const navs = {
+        dashboard: document.getElementById('nav-dashboard'),
+        add: document.getElementById('nav-add'),
+        manage: document.getElementById('nav-manage')
+      };
+      function showPage(page) {
+        Object.values(pages).forEach(p => p.classList.add('hidden'));
+        Object.values(navs).forEach(n => n && n.classList.remove('bg-blue-100', 'text-blue-700', 'dark:bg-blue-700', 'dark:text-white'));
+        pages[page].classList.remove('hidden');
+        navs[page] && navs[page].classList.add('bg-blue-100', 'text-blue-700', 'dark:bg-blue-700', 'dark:text-white');
+      }
+      if (navs.dashboard) navs.dashboard.addEventListener('click', () => showPage('dashboard'));
+      if (navs.add) navs.add.addEventListener('click', () => showPage('add'));
+      if (navs.manage) navs.manage.addEventListener('click', () => showPage('manage'));
+      showPage('dashboard');
+
+      // SIDEBAR BUTTONS
+      const sidebarNavs = {
+        dashboard: document.getElementById('sidebar-dashboard'),
+        add: document.getElementById('sidebar-add'),
+        manage: document.getElementById('sidebar-manage')
+      };
+      Object.entries(sidebarNavs).forEach(([k, btn]) => btn && btn.addEventListener('click', () => {
+        showPage(k);
+        closeSidebar && closeSidebar();
+      }));
+    }
+
+    // Load components, then setup navigation after navbar/sidebar loaded
+    Promise.all([
+      loadComponent('navbar-container', 'components/navbar.html'),
+      loadComponent('sidebar-container', 'components/sidebar.html')
+    ]).then(() => {
+      setupNavigation();
+      // Re-run theme toggles and icons setup if needed
+      if (typeof updateToggleIcon === 'function') updateToggleIcon();
+      if (typeof updateSidebarToggleIcon === 'function') updateSidebarToggleIcon();
+      if (typeof setHamburgerVisibility === 'function') setHamburgerVisibility(false);
+      feather.replace();
+    });
+    // Load other components as before
+    loadComponent('dashboard-cards-container', 'components/dashboard-cards.html').then(() => {
+      // Fetch and update dashboard cards
+      async function updateDashboardCards() {
+        try {
+          // Fetch items
+          const itemsRes = await fetch('http://localhost:4000/api/items');
+          const items = await itemsRes.json();
+          // Total Items
+          document.getElementById('dashboard-total-items').textContent = items.length;
+          // Inventory Value
+          const inventoryValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+          document.getElementById('dashboard-inventory-value').textContent = `$${inventoryValue.toLocaleString(undefined, {maximumFractionDigits:2})}`;
+        } catch (err) {
+          document.getElementById('dashboard-total-items').textContent = 'Err';
+          document.getElementById('dashboard-inventory-value').textContent = 'Err';
+        }
+        try {
+          // Fetch sales
+          const salesRes = await fetch('http://localhost:4000/api/sales');
+          const sales = await salesRes.json();
+          // Total Sales (sum of qtySold)
+          const totalQtySold = sales.reduce((sum, sale) => sum + (sale.qtySold || 0), 0);
+          document.getElementById('dashboard-total-sales').textContent = totalQtySold;
+          // Sales Value
+          const salesValue = sales.reduce((sum, sale) => sum + (sale.saleValue || 0), 0);
+          document.getElementById('dashboard-sales-value').textContent = `$${salesValue.toLocaleString(undefined, {maximumFractionDigits:2})}`;
+        } catch (err) {
+          document.getElementById('dashboard-total-sales').textContent = 'Err';
+          document.getElementById('dashboard-sales-value').textContent = 'Err';
+        }
+      }
+      updateDashboardCards();
+      // Optionally, re-run when items or sales change
+      window.refreshDashboardCards = updateDashboardCards;
+      // Add polling to refresh dashboard every 5 seconds
+      setInterval(updateDashboardCards, 5000);
+    });
+    loadComponent('low-stock-table-container', 'components/low-stock-table.html').then(() => {
+      // Fetch and render low stock items
+      async function updateLowStockTable() {
+        const tbody = document.getElementById('low-stock-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+        try {
+          const res = await fetch('http://localhost:4000/api/items');
+          const items = await res.json();
+          const lowStockItems = items.filter(item => item.quantity < item.threshold);
+          if (lowStockItems.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No low stock items.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = '';
+          lowStockItems.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800';
+            tr.innerHTML = `
+              <td class="py-2 px-2 sm:px-4">${item.name}</td>
+              <td class="py-2 px-2 sm:px-4">${item.category}</td>
+              <td class="py-2 px-2 sm:px-4">$${item.price.toFixed(2)}</td>
+              <td class="py-2 px-2 sm:px-4">${item.quantity}</td>
+              <td class="py-2 px-2 sm:px-4">${item.threshold}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Error loading low stock items.</td></tr>';
+        }
+      }
+      updateLowStockTable();
+      window.refreshLowStockTable = updateLowStockTable;
+      setInterval(updateLowStockTable, 5000);
+    });
+
+    loadComponent('recent-sales-table-container', 'components/recent-sales-table.html').then(() => {
+      // Fetch and render recent sales
+      async function updateRecentSalesTable() {
+        const tbody = document.getElementById('recent-sales-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
+        try {
+          const res = await fetch('http://localhost:4000/api/sales');
+          let sales = await res.json();
+          // Sort by date descending if date exists
+          sales = sales.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+          const recentSales = sales.slice(0, 10); // Show 10 most recent
+          if (recentSales.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No recent sales.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = '';
+          recentSales.forEach(sale => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800';
+            tr.innerHTML = `
+              <td class="py-2 px-2 sm:px-4">${sale.item || ''}</td>
+              <td class="py-2 px-2 sm:px-4">${sale.qtySold || ''}</td>
+              <td class="py-2 px-2 sm:px-4">${sale.date ? new Date(sale.date).toLocaleString() : ''}</td>
+              <td class="py-2 px-2 sm:px-4">$${(sale.saleValue || 0).toFixed(2)}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Error loading recent sales.</td></tr>';
+        }
+      }
+      updateRecentSalesTable();
+      window.refreshRecentSalesTable = updateRecentSalesTable;
+      setInterval(updateRecentSalesTable, 5000);
+    });
+    loadComponent('add-item-container', 'components/add-item.html').then(() => {
+      // Add Item form handler
+      const form = document.getElementById('add-item-form');
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const name = document.getElementById('item-name').value.trim();
+          const category = document.getElementById('item-category').value.trim();
+          const price = parseFloat(document.getElementById('item-price').value);
+          const quantity = parseInt(document.getElementById('item-quantity').value, 10);
+          const threshold = parseInt(document.getElementById('item-threshold').value, 10);
+          if (!name || !category || isNaN(price) || isNaN(quantity) || isNaN(threshold)) {
+            alert('Please fill in all fields correctly.');
+            return;
+          }
+          const item = { name, category, price, quantity, threshold };
+          console.log(name, category, price, quantity, threshold);
+          try {
+            const res = await fetch('http://localhost:4000/api/items', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(item)
+            });
+            console.log(res);
+            if (res.ok) {
+              alert('Item added successfully!');
+              form.reset();
+              if (typeof window.refreshInventoryTable === 'function') {
+                window.refreshInventoryTable();
+                if (typeof window.refreshDashboardCards === 'function') {
+                  window.refreshDashboardCards();
+                }
+              }
+            } else {
+              const err = await res.json();
+              alert('Error: ' + (err.message || 'Could not add item.'));
+            }
+          } catch (err) {
+            alert('Network error: ' + err.message);
+          }
+        });
+      }
+    });
+    loadComponent('manage-inventory-container', 'components/manage-inventory.html').then(() => {
+      // Fetch and render inventory items
+      async function fetchAndRenderInventory() {
+        const tbody = document.getElementById('inventory-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
+        try {
+          const res = await fetch('http://localhost:4000/api/items');
+          const items = await res.json();
+          if (!Array.isArray(items) || items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No items found.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = '';
+          items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800 hover:bg-blue-50 hover:dark:bg-gray-700 transition-colors';
+            tr.innerHTML = `
+              <td class="py-2 px-2 sm:px-4">${item.name}</td>
+              <td class="py-2 px-2 sm:px-4">${item.category}</td>
+              <td class="py-2 px-2 sm:px-4">$${item.price.toFixed(2)}</td>
+              <td class="py-2 px-2 sm:px-4">${item.quantity}</td>
+              <td class="py-2 px-2 sm:px-4">${item.threshold}</td>
+              <td class="py-2 px-2 sm:px-4 flex items-center gap-2">
+                <input type="number" min="1" max="${item.quantity}" value="1" class="remove-qty-input w-14 rounded border px-1 py-0.5 text-xs dark:bg-gray-700 dark:border-gray-600" data-id="${item._id}" />
+                <button data-id="${item._id}" class="remove-item-btn bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Remove</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500">Error loading items.</td></tr>';
+        }
+      }
+      fetchAndRenderInventory();
+      // Remove item handler
+      document.getElementById('inventory-table-body').addEventListener('click', async (e) => {
+        if (e.target.classList.contains('remove-item-btn')) {
+          const id = e.target.getAttribute('data-id');
+          const qtyInput = e.target.parentElement.querySelector('.remove-qty-input');
+          const qtyToRemove = parseInt(qtyInput.value, 10);
+          if (!qtyToRemove || qtyToRemove < 1) {
+            alert('Please enter a valid quantity to remove.');
+            return;
+          }
+          if (confirm(`Are you sure you want to remove ${qtyToRemove} of this item?`)) {
+            try {
+              // Fetch current item to get quantity
+              const resItem = await fetch(`http://localhost:4000/api/items/${id}`);
+              const item = await resItem.json();
+              if (qtyToRemove > item.quantity) {
+                alert('Not enough inventory');
+                return;
+              } else if (qtyToRemove === item.quantity) {
+                // Remove the whole item if removing all
+                const res = await fetch(`http://localhost:4000/api/items/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                  // Record the sale for full removal
+                  await fetch('http://localhost:4000/api/sales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      item: item.name,
+                      qtySold: item.quantity,
+                      saleValue: item.price * item.quantity,
+                      date: new Date().toISOString()
+                    })
+                  });
+                  fetchAndRenderInventory();
+                  if (typeof window.refreshRecentSalesTable === 'function') window.refreshRecentSalesTable();
+                  if (typeof window.refreshDashboardCards === 'function') window.refreshDashboardCards();
+                } else {
+                  alert('Failed to remove item.');
+                }
+              } else {
+                // Update item with new quantity
+                const res = await fetch(`http://localhost:4000/api/items/${id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ quantity: item.quantity - qtyToRemove })
+                });
+                if (res.ok) {
+                  // Record the sale for partial removal
+                  await fetch('http://localhost:4000/api/sales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      item: item.name,
+                      qtySold: qtyToRemove,
+                      saleValue: item.price * qtyToRemove,
+                      date: new Date().toISOString()
+                    })
+                  });
+                  // Fetch the updated item to check threshold
+                  const updatedRes = await fetch(`http://localhost:4000/api/items/${id}`);
+                  if (updatedRes.ok) {
+                    const updatedItem = await updatedRes.json();
+                    if (updatedItem.quantity < updatedItem.threshold) {
+                      alert(`Inventory for '${updatedItem.name}' is low and needs to be restocked!`);
+                    }
+                  }
+                  fetchAndRenderInventory();
+                  if (typeof window.refreshRecentSalesTable === 'function') window.refreshRecentSalesTable();
+                  if (typeof window.refreshDashboardCards === 'function') window.refreshDashboardCards();
+                } else {
+                  alert('Failed to update item quantity.');
+                }
+              }
+            } catch (err) {
+              alert('Network error: ' + err.message);
+            }
+          }
+        }
+      });
+      // Optionally, re-fetch inventory after adding an item
+      window.refreshInventoryTable = fetchAndRenderInventory;
+    });
+
+    function setInitialTheme() {
+      if (
+        localStorage.theme == 'dark' ||
+        (!localStorage.theme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    setInitialTheme();
+
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    function updateToggleIcon() {
+      themeToggleBtn.innerHTML = '';
+      const icon = document.createElement('i');
+      icon.setAttribute('data-feather', document.documentElement.classList.contains('dark') ? 'sun' : 'moon');
+      icon.className = 'w-5 h-5';
+      themeToggleBtn.appendChild(icon);
+      feather.replace();
+    }
+    updateToggleIcon();
+
+    themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.theme = isDark ? 'dark' : 'light';
+      requestAnimationFrame(updateToggleIcon);
+    });
+
+    // SIDEBAR/HAMBURGER LOGIC
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const hamburger = document.getElementById('hamburger');
+    const sidebarClose = document.getElementById('sidebar-close');
+    function setHamburgerVisibility(open) {
+      if (open) {
+        hamburger.classList.add('opacity-0','pointer-events-none');
+      } else {
+        hamburger.classList.remove('opacity-0','pointer-events-none');
+      }
+    }
+    function openSidebar() {
+      sidebar.classList.remove('-translate-x-full');
+      sidebarOverlay.classList.remove('hidden');
+      setHamburgerVisibility(true);
+      feather.replace();
+    }
+    function closeSidebar() {
+      sidebar.classList.add('-translate-x-full');
+      sidebarOverlay.classList.add('hidden');
+      setHamburgerVisibility(false);
+    }
+    hamburger.addEventListener('click', openSidebar);
+    sidebarClose.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+    // Sidebar nav links
+    const sidebarNavs = {
+      dashboard: document.getElementById('sidebar-dashboard'),
+      add: document.getElementById('sidebar-add'),
+      manage: document.getElementById('sidebar-manage')
+    };
+    Object.entries(sidebarNavs).forEach(([k, btn]) => btn.addEventListener('click', () => {
+      showPage(k);
+      closeSidebar();
+    }));
+    // Sidebar dark mode toggle
+    const sidebarThemeToggleBtn = document.getElementById('sidebar-theme-toggle');
+    function updateSidebarToggleIcon() {
+      sidebarThemeToggleBtn.innerHTML = '';
+      const icon = document.createElement('i');
+      icon.setAttribute('data-feather', document.documentElement.classList.contains('dark') ? 'sun' : 'moon');
+      icon.className = 'w-5 h-5';
+      sidebarThemeToggleBtn.appendChild(icon);
+      feather.replace();
+    }
+    updateSidebarToggleIcon();
+    sidebarThemeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.theme = isDark ? 'dark' : 'light';
+      requestAnimationFrame(() => {
+        updateSidebarToggleIcon();
+        updateToggleIcon();
+      });
+    });
+    // On load, ensure hamburger is visible
+    setHamburgerVisibility(false);
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-40 z-40 hidden"></div>
+<aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 shadow-lg z-50 transform -translate-x-full transition-transform duration-200 ease-in-out sm:hidden flex flex-col">
+  <div class="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+    <span class="font-bold text-xl text-blue-700 dark:text-blue-300">InventoryPro</span>
+    <button id="sidebar-close" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none">
+      <i data-feather="x"></i>
+    </button>
+  </div>
+  <nav class="flex flex-col space-y-2 px-4 py-4">
+    <button id="sidebar-dashboard" class="text-left px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none">Dashboard</button>
+    <button id="sidebar-add" class="text-left px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none">Add Item</button>
+    <button id="sidebar-manage" class="text-left px-4 py-2 rounded hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none">Manage Inventory</button>
+    <button id="sidebar-theme-toggle" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none w-10 mt-2">
+      <i data-feather="moon" class="w-5 h-5"></i>
+    </button>
+  </nav>
+</aside>
+<button id="hamburger" class="sm:hidden fixed top-4 left-4 z-50 p-2 rounded bg-white dark:bg-gray-800 shadow focus:outline-none transition-opacity duration-200">
+  <i data-feather="menu" class="w-6 h-6"></i>
+</button> 

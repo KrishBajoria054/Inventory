@@ -1,0 +1,29 @@
+<div class="bg-white dark:bg-gray-800 shadow-lg rounded-2xl p-4 sm:p-8">
+  <h2 class="font-bold text-lg sm:text-2xl mb-4 sm:mb-6 text-blue-700 dark:text-blue-300">Manage Inventory</h2>
+  <!-- Search Bar -->
+  <div class="flex flex-col sm:flex-row items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
+    <div class="relative w-full max-w-md">
+      <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+        <i data-feather="search" class="text-gray-400 dark:text-gray-500"></i>
+      </span>
+      <input type="text" placeholder="Search by name or category" class="pl-10 w-full rounded-md p-2 border focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-gray-100 text-xs sm:text-sm">
+    </div>
+  </div>
+  <!-- Inventory Table -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-xs sm:text-sm text-gray-900 dark:text-gray-100 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 border-separate border-spacing-0">
+      <thead>
+        <tr class="bg-gray-100 dark:bg-gray-700">
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Item Name</th>
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Category</th>
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Price</th>
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Quantity</th>
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Threshold</th>
+          <th class="py-2 px-2 sm:px-4 text-left text-gray-600 dark:text-gray-300">Remove</th>
+        </tr>
+      </thead>
+      <tbody id="inventory-table-body">
+      </tbody>
+    </table>
+  </div>
+</div> 
