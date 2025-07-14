@@ -143,12 +143,44 @@
             tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800';
             tr.innerHTML = `
               <td class="py-2 px-2 sm:px-4">${item.name}</td>
-              <td class="py-2 px-2 sm:px-4">${item.category}</td>
-              <td class="py-2 px-2 sm:px-4">$${item.price.toFixed(2)}</td>
               <td class="py-2 px-2 sm:px-4">${item.quantity}</td>
               <td class="py-2 px-2 sm:px-4">${item.threshold}</td>
+              <td class="py-2 px-2 sm:px-4">${item.category}</td>
+              <td class="py-2 px-2 sm:px-4 flex items-center gap-2">
+                <input type="number" min="1" value="1" class="restock-qty-input w-14 rounded border px-1 py-0.5 text-xs dark:bg-gray-700 dark:border-gray-600" data-id="${item._id}" />
+                <button data-id="${item._id}" class="restock-btn bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Restock</button>
+              </td>
             `;
             tbody.appendChild(tr);
+          });
+          // Always re-attach the event listener after rendering
+          tbody.querySelectorAll('.restock-btn').forEach(btn => {
+            btn.onclick = async function () {
+              const id = btn.getAttribute('data-id');
+              const qtyInput = btn.parentElement.querySelector('.restock-qty-input');
+              const restockQty = parseInt(qtyInput.value, 10);
+              if (!restockQty || restockQty < 1) {
+                alert('Please enter a valid restock quantity.');
+                return;
+              }
+              // Fetch current item to get quantity
+              const resItem = await fetch(`http://localhost:4000/api/items/${id}`);
+              const item = await resItem.json();
+              // Update item with new quantity
+              const res = await fetch(`http://localhost:4000/api/items/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity: item.quantity + restockQty })
+              });
+              if (res.ok) {
+                alert('Item restocked successfully!');
+                if (typeof window.refreshLowStockTable === 'function') window.refreshLowStockTable();
+                if (typeof window.refreshInventoryTable === 'function') window.refreshInventoryTable();
+                if (typeof window.refreshDashboardCards === 'function') window.refreshDashboardCards();
+              } else {
+                alert('Failed to restock item.');
+              }
+            };
           });
         } catch (err) {
           tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Error loading low stock items.</td></tr>';
@@ -240,39 +272,62 @@
     });
     loadComponent('manage-inventory-container', 'components/manage-inventory.html').then(() => {
       // Fetch and render inventory items
-      async function fetchAndRenderInventory() {
+      let allInventoryItems = [];
+      async function fetchAndRenderInventory(filter = '') {
         const tbody = document.getElementById('inventory-table-body');
         if (!tbody) return;
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Loading...</td></tr>';
         try {
           const res = await fetch('http://localhost:4000/api/items');
           const items = await res.json();
-          if (!Array.isArray(items) || items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No items found.</td></tr>';
-            return;
-          }
-          tbody.innerHTML = '';
-          items.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800 hover:bg-blue-50 hover:dark:bg-gray-700 transition-colors';
-            tr.innerHTML = `
-              <td class="py-2 px-2 sm:px-4">${item.name}</td>
-              <td class="py-2 px-2 sm:px-4">${item.category}</td>
-              <td class="py-2 px-2 sm:px-4">$${item.price.toFixed(2)}</td>
-              <td class="py-2 px-2 sm:px-4">${item.quantity}</td>
-              <td class="py-2 px-2 sm:px-4">${item.threshold}</td>
-              <td class="py-2 px-2 sm:px-4 flex items-center gap-2">
-                <input type="number" min="1" max="${item.quantity}" value="1" class="remove-qty-input w-14 rounded border px-1 py-0.5 text-xs dark:bg-gray-700 dark:border-gray-600" data-id="${item._id}" />
-                <button data-id="${item._id}" class="remove-item-btn bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Remove</button>
-              </td>
-            `;
-            tbody.appendChild(tr);
-          });
+          allInventoryItems = items;
+          renderInventoryTable(filter);
         } catch (err) {
           tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500">Error loading items.</td></tr>';
         }
       }
+      function renderInventoryTable(filter = '') {
+        const tbody = document.getElementById('inventory-table-body');
+        if (!tbody) return;
+        let items = allInventoryItems;
+        if (filter) {
+          const f = filter.toLowerCase();
+          items = items.filter(item =>
+            item.name.toLowerCase().includes(f) ||
+            item.category.toLowerCase().includes(f)
+          );
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No items found.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = '';
+        items.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.className = 'border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 even:dark:bg-gray-800 hover:bg-blue-50 hover:dark:bg-gray-700 transition-colors';
+          tr.innerHTML = `
+            <td class="py-2 px-2 sm:px-4">${item.name}</td>
+            <td class="py-2 px-2 sm:px-4">${item.category}</td>
+            <td class="py-2 px-2 sm:px-4">$${item.price.toFixed(2)}</td>
+            <td class="py-2 px-2 sm:px-4">${item.quantity}</td>
+            <td class="py-2 px-2 sm:px-4">${item.threshold}</td>
+            <td class="py-2 px-2 sm:px-4 flex items-center gap-2">
+              <input type="number" min="1" max="${item.quantity}" value="1" class="remove-qty-input w-14 rounded border px-1 py-0.5 text-xs dark:bg-gray-700 dark:border-gray-600" data-id="${item._id}" />
+              <button data-id="${item._id}" class="remove-item-btn bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-2 sm:px-3 py-1 rounded text-xs sm:text-sm">Remove</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
       fetchAndRenderInventory();
+      // Search bar handler
+      const searchInput = document.querySelector('#manage-inventory-container input[type="text"]');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          const filter = e.target.value;
+          renderInventoryTable(filter);
+        });
+      }
       // Remove item handler
       document.getElementById('inventory-table-body').addEventListener('click', async (e) => {
         if (e.target.classList.contains('remove-item-btn')) {
